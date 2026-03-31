@@ -1,0 +1,24 @@
+# Core
+numpy
+pandas
+scipy
+matplotlib
+seaborn
+scikit-learn
+statsmodels
+tqdm
+
+dash
+statsmodels
+
+# Deep learning
+torch>=2.1
+
+# I/O & utils
+requests>=2.31
+pyyaml>=6.0
+
+pyarrow
+
+# notebook
+nbformat>=4.2.0
