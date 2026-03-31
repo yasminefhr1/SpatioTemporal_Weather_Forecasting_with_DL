@@ -1,68 +1,73 @@
 import os
-import requests
 import re
+import argparse
+import requests
 from tqdm import tqdm
 
-# url récupérée depuis
-# https://explore.data.gouv.fr/fr/datasets/6569b3d7d193b4daf2b43edc/#/resources/f7e77d52-1496-4761-b395-288793e63155
-API_URL="https://www.data.gouv.fr/api/1/datasets/6569b3d7d193b4daf2b43edc/"
+API_URL = "https://www.data.gouv.fr/api/1/datasets/6569b3d7d193b4daf2b43edc/"
 
-# on va récupérer tous les fichiers des départements pour la période 1950/2023 et pour 2024-aujourd'hui
-fichiers=["periode_1950-2023", "periode_2024"]
+KEYWORDS = [
+    "periode_1950-2023",
+    "periode_2024-2026",
+    "1950-2023",
+    "2024-2026",
 
-def download_data():
+]
+
+def download_data(out_dir: str):
     print("Récupération du jeu de données...")
+
     try:
-        response=requests.get(API_URL)
+        response = requests.get(API_URL, timeout=30)
         response.raise_for_status()
-        metadata=response.json()
+        metadata = response.json()
     except Exception as e:
         print(f"Erreur lors de l'accès à l'API : {e}")
         return
 
-    resources=metadata.get('resources', [])
+    resources = metadata.get("resources", [])
     print(f"Analyse de {len(resources)} fichiers...")
 
-    # filter les fichiers à télécharger
     to_download = []
     for res in resources:
-        title=res.get('title', '')
-        # vérifier que le titre correspond aux fichiers à récupérer
-        if any(fichier in title for fichier in fichiers):
+        title = (res.get("title") or "").lower()
+        url = res.get("url") or ""
+
+        if any(k.lower() in title for k in KEYWORDS) and url:
             to_download.append(res)
 
     print(f"Démarrage du téléchargement de {len(to_download)} fichiers...")
 
+    os.makedirs(out_dir, exist_ok=True)
+
     for res in tqdm(to_download):
-        file_url=res.get('url')
-        titre_fichier=res.get('title')
+        file_url = res.get("url")
+        titre_fichier = res.get("title", "unknown_file")
 
-        # vérification du nom de fichier
-        safe_filename = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', titre_fichier)
-        if not safe_filename.endswith('.csv.gz'):
-             safe_filename += '.csv.gz'
-             
-        # crée le dossier "data/raw" s'il n'existe pas
-        os.makedirs("data/raw", exist_ok=True)
-        output_path = os.path.join("data/raw", safe_filename)
+        safe_filename = re.sub(r"[^a-zA-Z0-9_.-]", "_", titre_fichier)
+        if not safe_filename.endswith(".csv.gz"):
+            safe_filename += ".csv.gz"
 
-        # si le fichier n'est pas déjà enregistré, on le télécharge
-        if not os.path.exists(output_path):
-            try:
-                # utilisation de stream pour ne pas surcharger la mémoire
-                with requests.get(file_url, stream=True) as r:
-                    r.raise_for_status()
-                    with open(output_path, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=8192):
+        output_path = os.path.join(out_dir, safe_filename)
+
+        if os.path.exists(output_path):
+            continue
+
+        try:
+            with requests.get(file_url, stream=True, timeout=60) as r:
+                r.raise_for_status()
+                with open(output_path, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        if chunk:
                             f.write(chunk)
-            except Exception as e:
-                print(f"Erreur téléchargement {titre_fichier}: {e}")
+        except Exception as e:
+            print(f"Erreur téléchargement {titre_fichier}: {e}")
 
-        else:
-            # rien à faire, le fichier existe déjà : on passe au suivant
-            pass
+    print("\nTéléchargement terminé")
 
-    print(f"\nTéléchargement terminé")
 
 if __name__ == "__main__":
-    download_data()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--out_dir", type=str, default="data/raw")
+    args = parser.parse_args()
+    download_data(args.out_dir)

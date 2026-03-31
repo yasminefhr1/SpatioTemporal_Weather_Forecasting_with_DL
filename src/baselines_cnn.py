@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-from data_processing import (
+from src.data_processing import (
     load_and_preprocess_multi_dept,
     split_by_department,
     split_by_time_strict,
